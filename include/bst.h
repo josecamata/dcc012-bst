@@ -36,10 +36,12 @@ class BSTNode
         BSTNode(T data);                    // Construtor
         BSTNode(const BSTNode<T>* node);    // Construtor de cópia
         T getData();                        // Retorna o dado armazenado no nó
+        BSTNode<T>* getParent();            // Retorna o pai do nó
         BSTNode<T>* getLeft();              // Retorna o filho esquerdo
         BSTNode<T>* getRight();             // Retorna o filho direito
     protected:
         T data;                             // Dado armazenado no nó
+        BSTNode<T>* parent;                 // Ponteiro para o pai
         BSTNode<T> *left;                   // Ponteiro para o filho esquerdo
         BSTNode<T> *right;                  // Ponteiro para o filho direito
 };
@@ -47,11 +49,11 @@ class BSTNode
 // Implementação da classe BSTNode
 
 template<typename T>
-BSTNode<T>::BSTNode(T data):data(data),left(nullptr),right(nullptr)
+BSTNode<T>::BSTNode(T data):data(data),parent(nullptr), left(nullptr),right(nullptr)
 { }
 
 template<typename T>
-BSTNode<T>::BSTNode(const BSTNode<T>* node):data(node->data),left(node->left),right(node->right)
+BSTNode<T>::BSTNode(const BSTNode<T>* node):data(node->data),parent(node->parent),left(node->left),right(node->right)
 { }
 
 template<typename T>
@@ -70,6 +72,12 @@ template <typename T>
 BSTNode<T>* BSTNode<T>::getRight()
 {
     return this->right;
+}
+
+template <typename T>
+BSTNode<T>* BSTNode<T>::getParent()
+{
+    return this->parent;
 }
 
 /*
@@ -93,6 +101,11 @@ class BST
         BSTNode<T>* insert(T data);   // Insere um dado na árvore
         void        remove(T data);   // Remove um dado da árvore
         BSTNode<T>* search(T data);   // Busca um dado na árvore
+        int         height();         // Obtem a altura da arvore
+        int         lenght();         // Obtem o número de nós da árvore
+        
+        BSTNode<T>* maximum();        // Obtem o valor máximo da árvore
+        BSTNode<T>* minimum();        // Obtem o valor mínimo da árvore
 
         void print();                 // Imprime a árvore em formato de árvore
         void print_inorder();         // Imprime a árvore em ordem
@@ -106,6 +119,13 @@ class BST
         // Métodos auxiliares
         void print(BSTNode<T>* node, const std::string& prefix, bool isLeft);
         void clear(BSTNode<T> *node);
+        BSTNode<T>* successor(BSTNode<T>* node); 
+
+        int height(BSTNode<T>* node);
+        int lenght(BSTNode<T>* node);
+        BSTNode<T>* minimum(BSTNode<T>* node); // retorna o nó com o menor valor da subárvore cuja raiz é node
+        BSTNode<T>* maximum(BSTNode<T>* node); // retorna o nó com o maior valor da subárvore cuja raiz é node
+        void transplant(BSTNode<T>* u, BSTNode<T>* v); // substitui a subárvore cuja raiz é u pela subárvore cuja raiz é v
 };
 
 // Implementação da classe BST
@@ -123,30 +143,27 @@ BST<T>::BST():root(nullptr)
 template <typename T>
 BSTNode<T>* BST<T>::insert(T data)
 {
-    BSTNode<T>* new_node = new BSTNode<T>(data);
-    if (this->root == nullptr)
-    {
-        this->root = new_node;
-        return this->root;
-    }
+    BSTNode<T>* y = nullptr;
+    BSTNode<T> *x = this->root;
+    BSTNode<T> *z = new BSTNode<T>(data);
 
-    BSTNode<T> *current = this->root;
-    BSTNode<T> *parent  = nullptr;
-    while (current != nullptr)
+    while (x != nullptr)
     {
-        parent = current;
-        if (data < current->data)
-            current = current->left;
+        y = x;
+        if (data < x->data)
+            x = x->left;
         else
-            current = current->right;
+            x = x->right;
     }
-
-    if (data < parent->data)
-        parent->left = new_node;
+    z->parent = y;
+    if (y == nullptr)
+        this->root = z;
+    else if (z->data < y->data)
+        y->left = z;
     else
-        parent->right = new_node;
+        y->right = z;
 
-    return new_node;
+    return z;
 }
 
 //Remoção de um dado da árvore
@@ -161,63 +178,27 @@ BSTNode<T>* BST<T>::insert(T data)
 template <typename T>
 void BST<T>::remove(T data)
 {
-    // Passo 1:
-    BSTNode<T> *current = this->root;
-    BSTNode<T> *parent  = nullptr;
-    while (current != nullptr)
-    {
-        if (data == current->data)
-            break;
-        parent = current;
-        if (data < current->data)
-            current = current->left;
-        else
-            current = current->right;
-    }
-
-    // Passo 2
-    if (current == nullptr)
+    BSTNode<T> *node = this->search(data);
+    if (node == nullptr)
         return;
-
-    // Passo 4
-    if (current->left == nullptr && current->right == nullptr)
-    {
-        if (parent == nullptr)
-            this->root = nullptr;
-        else if (parent->left == current)
-            parent->left = nullptr;
-        else
-            parent->right = nullptr;
-        delete current;
-    } // Passo 5
-    else if (current->left == nullptr || current->right == nullptr)
-    {
-        BSTNode<T> *child = (current->left != nullptr) ? current->left : current->right;
-        if (parent == nullptr)
-            this->root = child;
-        else if (parent->left == current)
-            parent->left = child;
-        else
-            parent->right = child;
-        delete current;
-    }
+    if (node->left == nullptr)
+        transplant(node, node->right);
+    else if (node->right == nullptr)
+        transplant(node, node->left);
     else
     {
-        // Passo 6
-        BSTNode<T> *parent_of_successor = current;
-        BSTNode<T> *successor = current->right;
-        while (successor->left != nullptr)
+        BSTNode<T> *y = this->minimum(node->right);
+        if (y->parent != node)
         {
-            parent_of_successor = successor;
-            successor = successor->left;
+            transplant(y, y->right);
+            y->right = node->right;
+            y->right->parent = y;
         }
-        current->data = successor->data;
-        if (parent_of_successor->left == successor)
-            parent_of_successor->left = successor->right;
-        else
-            parent_of_successor->right = successor->right;
-        delete successor;
+        transplant(node, y);
+        y->left = node->left;
+        y->left->parent = y;
     }
+    delete node;
 }
 
 
@@ -314,14 +295,110 @@ void BST<T>::print(BSTNode<T>* node, const std::string& prefix, bool isLeft)
     if(node == nullptr)
         return;
     
+    int  h = height(node);
+
     std::cout << prefix;
     std::cout << (isLeft ? "├──" : "└──" );
 
     // print the value of the node
-    std::cout <<"["<<node->data<<"]" << std::endl;
+    std::cout <<"["<<node->data<<"]("<<h<<")" << std::endl;
 
     print(node->left , prefix + (isLeft ? "│   " : "    "), true);
     print(node->right, prefix + (isLeft ? "│   " : "    "), false);
+}
+
+template <typename T>
+BSTNode<T>* BST<T>::successor(BSTNode<T>* x)
+{
+    if(x == nullptr)
+        return nullptr;
+    if(x->right != nullptr)
+        return minimum(x->right);
+
+    BSTNode<T>* y = x->parent;
+    while(y != nullptr && x == y->right)
+    {
+        x = y;
+        y = y->parent;
+    }
+    return y;
+}
+
+template <typename T>
+int BST<T>::height(BSTNode<T>* node)
+{
+    if(node == nullptr)
+        return -1;
+    return 1 + std::max(height(node->left), height(node->right));
+}
+
+template <typename T>
+int BST<T>::height()
+{
+    return height(this->root);
+}
+
+
+template <typename T>
+int BST<T>::lenght(BSTNode<T>* node)
+{
+    if(node == nullptr)
+        return 0;
+    return 1 + lenght(node->left) + lenght(node->right);
+}
+
+template <typename T>
+int BST<T>::lenght()
+{
+    return lenght(this->root);
+}
+
+
+template <typename T>
+BSTNode<T>* BST<T>::minimum()
+{
+    BSTNode<T>* current = this->root;
+    while(current->left != nullptr)
+        current = current->left;
+    return current;
+}
+
+template <typename T>
+BSTNode<T>* BST<T>::maximum(BSTNode<T>* node)
+{
+    BSTNode<T>* current = node;
+    while(current->right != nullptr)
+        current = current->right;
+    return current;
+}
+
+template <typename T>
+BSTNode<T>* BST<T>::minimum(BSTNode<T>* node)
+{
+    BSTNode<T>* current = node;
+    while(current->left != nullptr)
+        current = current->left;
+    return current;
+}
+
+template <typename T>
+BSTNode<T>* BST<T>::maximum()
+{
+    return maximum(this->root);
+}
+
+
+template <typename T>
+void BST<T>::transplant(BSTNode<T>* u, BSTNode<T>* v)
+{
+    if(u->parent == nullptr)
+        this->root = v;
+    else if(u == u->parent->left)
+        u->parent->left = v;
+    else
+        u->parent->right = v;
+    if(v != nullptr)
+        v->parent = u->parent;
 }
 
 
